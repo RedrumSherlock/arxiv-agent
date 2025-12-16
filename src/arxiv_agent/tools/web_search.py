@@ -1,4 +1,4 @@
-"""Tool for searching community feedback on papers."""
+"""Tool for searching community feedback on papers using Tavily."""
 
 import logging
 
@@ -8,10 +8,18 @@ from ..models import CommunityFeedback
 
 logger = logging.getLogger(__name__)
 
+_tavily_api_key: str = ""
+
+
+def init_tavily(api_key: str) -> None:
+    """Initialize Tavily with API key."""
+    global _tavily_api_key
+    _tavily_api_key = api_key
+
 
 def search_paper_feedback(paper_title: str, arxiv_id: str) -> CommunityFeedback:
     """
-    Search for community feedback on a paper using web search.
+    Search for community feedback on a paper using Tavily.
     
     Args:
         paper_title: Title of the paper
@@ -20,87 +28,65 @@ def search_paper_feedback(paper_title: str, arxiv_id: str) -> CommunityFeedback:
     Returns:
         CommunityFeedback with gathered information
     """
-    search_queries = [
-        f"{paper_title} arxiv discussion",
-        f"{arxiv_id} paper review",
-        f"{paper_title} twitter",
-    ]
+    if not _tavily_api_key:
+        logger.warning("Tavily API key not configured, skipping web search")
+        return CommunityFeedback(
+            paper_id=arxiv_id,
+            feedback_summary="Web search not configured.",
+            sources=[],
+        )
     
-    all_results = []
-    sources = []
+    query = f"{paper_title} {arxiv_id} discussion review feedback"
+    results = _tavily_search(query)
     
-    for query in search_queries:
-        results = _perform_search(query)
-        all_results.extend(results)
-        sources.extend([r.get("url", "") for r in results if r.get("url")])
+    if not results:
+        return CommunityFeedback(
+            paper_id=arxiv_id,
+            feedback_summary="No community feedback found.",
+            sources=[],
+        )
     
-    feedback_summary = _summarize_results(all_results) if all_results else "No community feedback found."
+    feedback_summary = _format_results(results)
+    sources = [r.get("url", "") for r in results if r.get("url")]
     
     return CommunityFeedback(
         paper_id=arxiv_id,
         feedback_summary=feedback_summary,
-        sources=list(set(sources))[:5],
+        sources=sources[:5],
     )
 
 
-def _perform_search(query: str) -> list[dict]:
-    """
-    Perform a web search. Returns mock results as placeholder.
-    In production, integrate with actual search API (Google, Serper, etc.)
-    """
-    logger.info(f"Searching for: {query}")
-    
-    search_url = f"https://html.duckduckgo.com/html/?q={query}"
+def _tavily_search(query: str, max_results: int = 5) -> list[dict]:
+    """Perform search using Tavily API."""
+    logger.info(f"Tavily search: {query[:50]}...")
     
     try:
-        response = httpx.get(
-            search_url,
-            timeout=15.0,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; ArxivAgent/1.0)"},
-            follow_redirects=True,
+        response = httpx.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": _tavily_api_key,
+                "query": query,
+                "max_results": max_results,
+                "search_depth": "basic",
+                "include_answer": False,
+            },
+            timeout=30.0,
         )
-        if response.status_code == 200:
-            return _parse_duckduckgo_html(response.text, query)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("results", [])
     except httpx.HTTPError as e:
-        logger.warning(f"Search failed for '{query}': {e}")
-    
-    return []
+        logger.warning(f"Tavily search failed: {e}")
+        return []
 
 
-def _parse_duckduckgo_html(html: str, query: str) -> list[dict]:
-    """Parse DuckDuckGo HTML results (basic extraction)."""
-    results = []
-    
-    import re
-    link_pattern = re.compile(r'class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>')
-    snippet_pattern = re.compile(r'class="result__snippet"[^>]*>([^<]*)</a>')
-    
-    links = link_pattern.findall(html)
-    snippets = snippet_pattern.findall(html)
-    
-    for i, (url, title) in enumerate(links[:5]):
-        snippet = snippets[i] if i < len(snippets) else ""
-        if url and not url.startswith("/"):
-            results.append({
-                "title": title.strip(),
-                "url": url,
-                "snippet": snippet.strip(),
-            })
-    
-    return results
-
-
-def _summarize_results(results: list[dict]) -> str:
-    """Summarize search results into a feedback string."""
-    if not results:
-        return "No community feedback found."
-    
+def _format_results(results: list[dict]) -> str:
+    """Format Tavily results into a feedback summary."""
     summaries = []
-    for r in results[:5]:
+    for r in results:
         title = r.get("title", "")
-        snippet = r.get("snippet", "")
-        if title or snippet:
-            summaries.append(f"- {title}: {snippet}" if snippet else f"- {title}")
+        content = r.get("content", "")[:200]
+        if title or content:
+            summaries.append(f"- {title}: {content}" if content else f"- {title}")
     
     return "\n".join(summaries) if summaries else "Limited community discussion found."
-

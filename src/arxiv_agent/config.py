@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     api_key: str = Field(default="", alias="API_KEY")
     api_endpoint: str = Field(default="", alias="API_ENDPOINT")
     
+    # Tavily API for web search
+    tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
+    
     email_address_list: str = Field(default="", alias="EMAIL_ADDRESS_LIST")
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
     webhook_url: str = Field(default="", alias="WEBHOOK_URL")

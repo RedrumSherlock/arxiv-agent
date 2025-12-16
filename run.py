@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from src.arxiv_agent.config import get_settings
 from src.arxiv_agent.llm import init_client
+from src.arxiv_agent.tools.web_search import init_tavily
 from src.arxiv_agent.workflow import run_workflow
 
 
@@ -40,6 +41,11 @@ async def _main() -> None:
         sys.exit(1)
     
     init_client(settings.api_key, settings.api_endpoint)
+    
+    if settings.tavily_api_key:
+        init_tavily(settings.tavily_api_key)
+    else:
+        logger.warning("TAVILY_API_KEY not set, web search for community feedback disabled")
     
     try:
         digest_items = await run_workflow(settings)
