@@ -4,8 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from google.adk.agents import LlmAgent
-
+from ..llm import chat_completion
 from ..models import ArxivPaper, FilteredPaper
 
 logger = logging.getLogger(__name__)
@@ -32,25 +31,16 @@ Be conservative - if there's a reasonable chance the paper is relevant, mark it 
 Only filter out papers that are clearly outside the acceptance criteria."""
 
 
-def create_filter_agent(model: str) -> LlmAgent:
-    """Create an agent for filtering papers by relevance."""
-    return LlmAgent(
-        name="paper_filter",
-        model=model,
-        instruction=FILTER_INSTRUCTION,
-    )
-
-
 async def filter_papers(
-    agent: LlmAgent,
+    model: str,
     papers: list[ArxivPaper],
     acceptance_criteria: str,
 ) -> list[FilteredPaper]:
     """
-    Filter papers based on acceptance criteria using the LLM agent.
+    Filter papers based on acceptance criteria using the LLM.
     
     Args:
-        agent: The filter LLM agent
+        model: Model name to use
         papers: List of papers to filter
         acceptance_criteria: Criteria for accepting papers
         
@@ -71,7 +61,7 @@ Categories: {', '.join(paper.categories)}
 Determine if this paper is relevant. Respond with JSON only."""
 
         try:
-            response = await agent.run_async(prompt)
+            response = await chat_completion(model, FILTER_INSTRUCTION, prompt)
             result = _parse_filter_response(response)
             
             results.append(FilteredPaper(
@@ -92,12 +82,10 @@ Determine if this paper is relevant. Respond with JSON only."""
 def _parse_filter_response(response: str) -> dict:
     """Parse the JSON response from the filter agent."""
     try:
-        text = str(response)
-        start = text.find("{")
-        end = text.rfind("}") + 1
+        start = response.find("{")
+        end = response.rfind("}") + 1
         if start >= 0 and end > start:
-            return json.loads(text[start:end])
+            return json.loads(response[start:end])
     except (json.JSONDecodeError, ValueError):
         pass
     return {"is_relevant": True, "reason": "Failed to parse response"}
-

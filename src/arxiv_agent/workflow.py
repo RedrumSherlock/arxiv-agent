@@ -11,14 +11,7 @@ from .tools import (
     send_email_notification,
     send_webhook_notification,
 )
-from .agents import (
-    create_filter_agent,
-    create_scorer_agent,
-    create_analyzer_agent,
-)
-from .agents.filter_agent import filter_papers
-from .agents.scorer_agent import score_papers
-from .agents.analyzer_agent import analyze_paper, analysis_to_digest
+from .agents import filter_papers, score_papers, analyze_paper, analysis_to_digest
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +49,8 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
     logger.info(f"Found {len(papers)} papers from arxiv")
     
     # Step 2: Filter papers
-    filter_agent = create_filter_agent(settings.model_mini)
     filtered = await filter_papers(
-        agent=filter_agent,
+        model=settings.model_mini,
         papers=papers,
         acceptance_criteria=settings.acceptance_criteria,
     )
@@ -71,9 +63,8 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         return []
     
     # Step 3: Score papers
-    scorer_agent = create_scorer_agent(settings.model_mini)
     scored = await score_papers(
-        agent=scorer_agent,
+        model=settings.model_mini,
         papers=relevant_papers,
         acceptance_criteria=settings.acceptance_criteria,
     )
@@ -89,22 +80,17 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         return []
     
     # Step 4: Deep analysis of top papers
-    analyzer_agent = create_analyzer_agent(settings.model_full)
     digest_items = []
     
     for scored_paper in top_papers:
         paper = scored_paper.paper
         logger.info(f"Analyzing paper: {paper.title[:60]}...")
         
-        # Gather community feedback
         feedback = search_paper_feedback(paper.title, paper.arxiv_id)
-        
-        # Download and extract paper content
         paper_content = download_and_extract_paper(paper.pdf_url, paper.arxiv_id)
         
-        # Deep analysis
         analysis = await analyze_paper(
-            agent=analyzer_agent,
+            model=settings.model_full,
             paper=paper,
             initial_score=scored_paper.score,
             community_feedback=feedback,
@@ -159,4 +145,3 @@ async def _send_notifications(
         logger.warning("No notification channels configured")
     
     return results
-

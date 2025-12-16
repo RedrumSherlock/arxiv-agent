@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "An AI agent to research latest arxiv papers and send digest to email or webhook"
 requires-python = ">=3.10"
 dependencies = [
-    "google-adk>=1.2.0",
+    "openai>=1.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "httpx>=0.27.0",
@@ -24,4 +24,3 @@ packages = ["src/arxiv_agent"]
 dev-dependencies = [
     "ruff>=0.8.0",
 ]
-

@@ -4,8 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from google.adk.agents import LlmAgent
-
+from ..llm import chat_completion
 from ..models import ArxivPaper, ScoredPaper
 
 logger = logging.getLogger(__name__)
@@ -38,25 +37,16 @@ Respond with a JSON object:
 Be calibrated: 90+ is exceptional/groundbreaking, 70-89 is very good, 50-69 is decent, below 50 is low relevance."""
 
 
-def create_scorer_agent(model: str) -> LlmAgent:
-    """Create an agent for scoring papers."""
-    return LlmAgent(
-        name="paper_scorer",
-        model=model,
-        instruction=SCORER_INSTRUCTION,
-    )
-
-
 async def score_papers(
-    agent: LlmAgent,
+    model: str,
     papers: list[ArxivPaper],
     acceptance_criteria: str,
 ) -> list[ScoredPaper]:
     """
-    Score papers using the LLM agent.
+    Score papers using the LLM.
     
     Args:
-        agent: The scorer LLM agent
+        model: Model name to use
         papers: List of papers to score
         acceptance_criteria: Criteria for evaluation context
         
@@ -79,7 +69,7 @@ Categories: {', '.join(paper.categories)}
 Score this paper from 1-100. Respond with JSON only."""
 
         try:
-            response = await agent.run_async(prompt)
+            response = await chat_completion(model, SCORER_INSTRUCTION, prompt)
             result = _parse_scorer_response(response)
             
             results.append(ScoredPaper(
@@ -100,15 +90,13 @@ Score this paper from 1-100. Respond with JSON only."""
 def _parse_scorer_response(response: str) -> dict:
     """Parse the JSON response from the scorer agent."""
     try:
-        text = str(response)
-        start = text.find("{")
-        end = text.rfind("}") + 1
+        start = response.find("{")
+        end = response.rfind("}") + 1
         if start >= 0 and end > start:
-            data = json.loads(text[start:end])
+            data = json.loads(response[start:end])
             score = int(data.get("score", 50))
             score = max(1, min(100, score))
             return {"score": score, "justification": data.get("justification", "")}
     except (json.JSONDecodeError, ValueError):
         pass
     return {"score": 50, "justification": "Failed to parse response"}
-

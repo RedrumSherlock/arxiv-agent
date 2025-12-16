@@ -1,12 +1,12 @@
 """Agent implementations for arxiv paper processing."""
 
-from .filter_agent import create_filter_agent
-from .scorer_agent import create_scorer_agent
-from .analyzer_agent import create_analyzer_agent
+from .filter_agent import filter_papers
+from .scorer_agent import score_papers
+from .analyzer_agent import analyze_paper, analysis_to_digest
 
 __all__ = [
-    "create_filter_agent",
-    "create_scorer_agent",
-    "create_analyzer_agent",
+    "filter_papers",
+    "score_papers",
+    "analyze_paper",
+    "analysis_to_digest",
 ]
-

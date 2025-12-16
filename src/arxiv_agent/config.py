@@ -16,16 +16,16 @@ class Settings(BaseSettings):
     max_items: int = Field(default=5, alias="MAX_ITEMS")
     score_threshold: int = Field(default=50, alias="SCORE_THRESHOLD")
     
-    openai_api_key_mini: str = Field(default="", alias="OPENAI_API_KEY_MINI")
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
-    google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
+    # LLM API Configuration (OpenAI-compatible: Azure OpenAI, LiteLLM, etc.)
+    api_key: str = Field(default="", alias="API_KEY")
+    api_endpoint: str = Field(default="", alias="API_ENDPOINT")
     
     email_address_list: str = Field(default="", alias="EMAIL_ADDRESS_LIST")
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
     webhook_url: str = Field(default="", alias="WEBHOOK_URL")
     
-    model_mini: str = Field(default="gemini-2.0-flash", alias="MODEL_MINI")
-    model_full: str = Field(default="gemini-2.5-pro-preview-06-05", alias="MODEL_FULL")
+    model_mini: str = Field(default="gemini-2.5-flash", alias="MODEL_MINI")
+    model_full: str = Field(default="gemini-3.0-pro-preview", alias="MODEL_FULL")
     
     class Config:
         env_file = ".env"
@@ -45,4 +45,3 @@ class Settings(BaseSettings):
 
 def get_settings() -> Settings:
     return Settings()
-

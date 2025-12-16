@@ -7,6 +7,7 @@ import sys
 from dotenv import load_dotenv
 
 from src.arxiv_agent.config import get_settings
+from src.arxiv_agent.llm import init_client
 from src.arxiv_agent.workflow import run_workflow
 
 
@@ -21,6 +22,7 @@ def _setup_logging() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
 
 
 async def _main() -> None:
@@ -33,12 +35,11 @@ async def _main() -> None:
     
     settings = get_settings()
     
-    if not settings.google_api_key:
-        logger.error("GOOGLE_API_KEY is required")
+    if not settings.api_key or not settings.api_endpoint:
+        logger.error("API_KEY and API_ENDPOINT are required")
         sys.exit(1)
     
-    import os
-    os.environ["GOOGLE_API_KEY"] = settings.google_api_key
+    init_client(settings.api_key, settings.api_endpoint)
     
     try:
         digest_items = await run_workflow(settings)
@@ -57,4 +58,3 @@ async def _main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(_main())
-

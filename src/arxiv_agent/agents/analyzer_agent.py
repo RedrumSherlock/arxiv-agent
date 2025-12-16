@@ -4,8 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from google.adk.agents import LlmAgent
-
+from ..llm import chat_completion
 from ..models import ArxivPaper, CommunityFeedback, PaperAnalysis, DigestItem
 
 logger = logging.getLogger(__name__)
@@ -39,17 +38,8 @@ Respond with a JSON object:
 Be thorough but concise. Focus on the most important insights."""
 
 
-def create_analyzer_agent(model: str) -> LlmAgent:
-    """Create an agent for deep paper analysis."""
-    return LlmAgent(
-        name="paper_analyzer",
-        model=model,
-        instruction=ANALYZER_INSTRUCTION,
-    )
-
-
 async def analyze_paper(
-    agent: LlmAgent,
+    model: str,
     paper: ArxivPaper,
     initial_score: int,
     community_feedback: CommunityFeedback,
@@ -60,7 +50,7 @@ async def analyze_paper(
     Perform deep analysis of a paper.
     
     Args:
-        agent: The analyzer LLM agent
+        model: Model name to use
         paper: Paper to analyze
         initial_score: Score from initial scoring
         community_feedback: Gathered community feedback
@@ -95,7 +85,7 @@ Paper Content (excerpt):
 Provide a comprehensive analysis. Respond with JSON only."""
 
     try:
-        response = await agent.run_async(prompt)
+        response = await chat_completion(model, ANALYZER_INSTRUCTION, prompt)
         result = _parse_analyzer_response(response)
         
         return PaperAnalysis(
@@ -136,15 +126,13 @@ def analysis_to_digest(analysis: PaperAnalysis) -> DigestItem:
 def _parse_analyzer_response(response: str) -> dict:
     """Parse the JSON response from the analyzer agent."""
     try:
-        text = str(response)
-        start = text.find("{")
-        end = text.rfind("}") + 1
+        start = response.find("{")
+        end = response.rfind("}") + 1
         if start >= 0 and end > start:
-            data = json.loads(text[start:end])
+            data = json.loads(response[start:end])
             if "rating" in data:
                 data["rating"] = max(1, min(100, int(data["rating"])))
             return data
     except (json.JSONDecodeError, ValueError):
         pass
     return {}
-
