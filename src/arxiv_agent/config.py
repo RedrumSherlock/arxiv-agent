@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     
     email_address_list: str = Field(default="", alias="EMAIL_ADDRESS_LIST")
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
+    brevo_sender_email: str = Field(default="", alias="BREVO_SENDER_EMAIL")
+    brevo_sender_name: str = Field(default="Arxiv Agent", alias="BREVO_SENDER_NAME")
     webhook_url: str = Field(default="", alias="WEBHOOK_URL")
     
     model_mini: str = Field(default="gemini-2.5-flash", alias="MODEL_MINI")

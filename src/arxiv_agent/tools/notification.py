@@ -13,7 +13,8 @@ def send_email_notification(
     digest_items: list[DigestItem],
     email_list: list[str],
     brevo_api_key: str,
-    sender_email: str = "noreply@arxiv-agent.local",
+    sender_email: str,
+    sender_name: str,
 ) -> NotificationResult:
     """
     Send digest via email using Brevo API.
@@ -23,6 +24,7 @@ def send_email_notification(
         email_list: List of recipient email addresses
         brevo_api_key: Brevo API key
         sender_email: Sender email address
+        sender_name: Sender display name
         
     Returns:
         NotificationResult indicating success/failure
@@ -36,7 +38,7 @@ def send_email_notification(
     html_content = _build_email_html(digest_items)
     
     payload = {
-        "sender": {"email": sender_email, "name": "Arxiv Agent"},
+        "sender": {"email": sender_email, "name": sender_name},
         "to": [{"email": email} for email in email_list],
         "subject": f"Arxiv Digest: {len(digest_items)} Papers",
         "htmlContent": html_content,

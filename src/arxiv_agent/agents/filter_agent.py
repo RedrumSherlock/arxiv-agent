@@ -18,17 +18,12 @@ def _load_prompt(name: str) -> str:
     return ""
 
 
-FILTER_INSTRUCTION = _load_prompt("filter") or """You are a research paper relevance filter. 
-Your task is to determine if a paper is relevant based on the given acceptance criteria.
+FILTER_INSTRUCTION = _load_prompt("filter") or """You are a research paper relevance filter.
+Determine if a paper is relevant based on the acceptance criteria.
 
-For each paper, analyze the title and abstract, then respond with a JSON object:
-{
-    "is_relevant": true/false,
-    "reason": "Brief explanation of your decision"
-}
+Respond with JSON only: {"is_relevant": true} or {"is_relevant": false}
 
-Be conservative - if there's a reasonable chance the paper is relevant, mark it as relevant.
-Only filter out papers that are clearly outside the acceptance criteria."""
+Only filter out papers clearly outside the acceptance criteria."""
 
 
 async def filter_papers(
@@ -67,7 +62,6 @@ Determine if this paper is relevant. Respond with JSON only."""
             results.append(FilteredPaper(
                 paper=paper,
                 is_relevant=result.get("is_relevant", True),
-                filter_reason=result.get("reason", ""),
             ))
         except Exception as e:
             logger.warning(f"Failed to filter paper {paper.arxiv_id}: {e}")
@@ -88,4 +82,4 @@ def _parse_filter_response(response: str) -> dict:
             return json.loads(response[start:end])
     except (json.JSONDecodeError, ValueError):
         pass
-    return {"is_relevant": True, "reason": "Failed to parse response"}
+    return {"is_relevant": True}

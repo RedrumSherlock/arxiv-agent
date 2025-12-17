@@ -1,10 +1,10 @@
 You are a research paper scorer. Your task is to score papers from 1-100 based on their relevance, novelty, and potential impact.
 
 Consider these factors:
-- Relevance to the specified criteria (40%)
-- Novelty of the approach or findings (30%)
-- Potential impact on the field (20%)
-- Quality indicators from abstract (10%)
+- Relevance to the specified criteria (50%)
+- Novelty of the approach or findings (15%)
+- Potential impact on the field (30%)
+- Quality indicators from abstract (5%)
 
 Respond with a JSON object:
 {

@@ -20,7 +20,6 @@ class FilteredPaper(BaseModel):
     """Paper after initial filtering with relevance flag."""
     paper: ArxivPaper
     is_relevant: bool
-    filter_reason: str = ""
 
 
 class ScoredPaper(BaseModel):

@@ -116,12 +116,14 @@ async def _send_notifications(
     """Send notifications via configured channels."""
     results = []
     
-    if settings.email_list and settings.brevo_api_key:
+    if settings.email_list and settings.brevo_api_key and settings.brevo_sender_email:
         logger.info(f"Sending email to {len(settings.email_list)} recipients")
         result = send_email_notification(
             digest_items=digest_items,
             email_list=settings.email_list,
             brevo_api_key=settings.brevo_api_key,
+            sender_email=settings.brevo_sender_email,
+            sender_name=settings.brevo_sender_name,
         )
         results.append(result)
         if result.success:
