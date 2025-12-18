@@ -53,6 +53,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         model=settings.model_mini,
         papers=papers,
         acceptance_criteria=settings.acceptance_criteria,
+        batch_size=settings.filter_batch_size,
     )
     
     relevant_papers = [f.paper for f in filtered if f.is_relevant]
@@ -67,6 +68,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         model=settings.model_mini,
         papers=relevant_papers,
         acceptance_criteria=settings.acceptance_criteria,
+        batch_size=settings.scorer_batch_size,
     )
     
     # Filter by score threshold and take top N

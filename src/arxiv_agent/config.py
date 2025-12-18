@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     )
     max_items: int = Field(default=5, alias="MAX_ITEMS")
     score_threshold: int = Field(default=50, alias="SCORE_THRESHOLD")
+    filter_batch_size: int = Field(default=10, alias="FILTER_BATCH_SIZE")
+    scorer_batch_size: int = Field(default=10, alias="SCORER_BATCH_SIZE")
     
     # LLM API Configuration (OpenAI-compatible: Azure OpenAI, LiteLLM, etc.)
     api_key: str = Field(default="", alias="API_KEY")

@@ -69,6 +69,7 @@ def send_webhook_notification(
 ) -> NotificationResult:
     """
     Send digest via webhook POST request.
+    Supports Google Chat webhooks (detected by URL) and generic webhooks.
     
     Args:
         digest_items: List of digest items to send
@@ -80,11 +81,16 @@ def send_webhook_notification(
     if not webhook_url:
         return NotificationResult(success=False, channel="webhook", message="No webhook URL")
     
-    payload = {
-        "type": "arxiv_digest",
-        "count": len(digest_items),
-        "papers": [item.model_dump() for item in digest_items],
-    }
+    is_google_chat = "chat.googleapis.com" in webhook_url
+    
+    if is_google_chat:
+        payload = _build_google_chat_payload(digest_items)
+    else:
+        payload = {
+            "type": "arxiv_digest",
+            "count": len(digest_items),
+            "papers": [item.model_dump() for item in digest_items],
+        }
     
     try:
         response = httpx.post(
@@ -100,6 +106,45 @@ def send_webhook_notification(
     except httpx.HTTPError as e:
         logger.error(f"Failed to send webhook: {e}")
         return NotificationResult(success=False, channel="webhook", message=str(e))
+
+
+def _build_google_chat_payload(digest_items: list[DigestItem]) -> dict:
+    """Build Google Chat webhook payload with cards."""
+    cards = []
+    
+    for item in digest_items:
+        card = {
+            "header": {
+                "title": item.title[:100],
+                "subtitle": f"Rating: {item.rating}/100 | {item.publish_date}",
+            },
+            "sections": [
+                {
+                    "widgets": [
+                        {"textParagraph": {"text": f"<b>Authors:</b> {item.authors}"}},
+                        {"textParagraph": {"text": f"<b>Summary:</b> {item.summary}"}},
+                        {"textParagraph": {"text": f"<b>Rating Justification:</b> {item.rating_justification}"}},
+                        {"textParagraph": {"text": f"<b>Community:</b> {item.community_reputation}"}},
+                        {
+                            "buttons": [
+                                {
+                                    "textButton": {
+                                        "text": "View on arXiv",
+                                        "onClick": {"openLink": {"url": item.arxiv_url}},
+                                    }
+                                }
+                            ]
+                        },
+                    ]
+                }
+            ],
+        }
+        cards.append({"card": card})
+    
+    return {
+        "text": f"📚 *Arxiv Paper Digest* - {len(digest_items)} papers found",
+        "cardsV2": [{"cardId": f"paper-{i}", "card": c["card"]} for i, c in enumerate(cards)],
+    }
 
 
 def _build_email_html(digest_items: list[DigestItem]) -> str:

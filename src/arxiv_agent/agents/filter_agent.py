@@ -19,9 +19,10 @@ def _load_prompt(name: str) -> str:
 
 
 FILTER_INSTRUCTION = _load_prompt("filter") or """You are a research paper relevance filter.
-Determine if a paper is relevant based on the acceptance criteria.
+Determine which papers are relevant based on the acceptance criteria.
 
-Respond with JSON only: {"is_relevant": true} or {"is_relevant": false}
+For each paper, respond with a JSON array of objects:
+[{"id": "paper_id", "is_relevant": true/false}, ...]
 
 Only filter out papers clearly outside the acceptance criteria."""
 
@@ -30,42 +31,40 @@ async def filter_papers(
     model: str,
     papers: list[ArxivPaper],
     acceptance_criteria: str,
+    batch_size: int = 10,
 ) -> list[FilteredPaper]:
     """
-    Filter papers based on acceptance criteria using the LLM.
+    Filter papers based on acceptance criteria using the LLM in batches.
     
     Args:
         model: Model name to use
         papers: List of papers to filter
         acceptance_criteria: Criteria for accepting papers
+        batch_size: Number of papers to process per LLM call
         
     Returns:
         List of FilteredPaper objects with relevance flags
     """
     results = []
+    paper_map = {p.arxiv_id: p for p in papers}
     
-    for paper in papers:
-        prompt = f"""Acceptance Criteria: {acceptance_criteria}
-
-Paper Title: {paper.title}
-
-Paper Abstract: {paper.abstract}
-
-Categories: {', '.join(paper.categories)}
-
-Determine if this paper is relevant. Respond with JSON only."""
-
-        try:
-            response = await chat_completion(model, FILTER_INSTRUCTION, prompt)
-            result = _parse_filter_response(response)
-            
-            results.append(FilteredPaper(
-                paper=paper,
-                is_relevant=result.get("is_relevant", True),
-            ))
-        except Exception as e:
-            logger.warning(f"Failed to filter paper {paper.arxiv_id}: {e}")
-            results.append(FilteredPaper(paper=paper, is_relevant=True))
+    for i in range(0, len(papers), batch_size):
+        batch = papers[i:i + batch_size]
+        batch_num = (i // batch_size) + 1
+        total_batches = (len(papers) + batch_size - 1) // batch_size
+        logger.info(f"Filtering batch {batch_num}/{total_batches} ({len(batch)} papers)")
+        batch_results = await _filter_batch(model, batch, acceptance_criteria)
+        
+        for arxiv_id, is_relevant in batch_results.items():
+            if arxiv_id in paper_map:
+                results.append(FilteredPaper(
+                    paper=paper_map[arxiv_id],
+                    is_relevant=is_relevant,
+                ))
+        
+        for paper in batch:
+            if paper.arxiv_id not in batch_results:
+                results.append(FilteredPaper(paper=paper, is_relevant=True))
     
     relevant_count = sum(1 for r in results if r.is_relevant)
     logger.info(f"Filtered {len(papers)} papers, {relevant_count} marked as relevant")
@@ -73,13 +72,47 @@ Determine if this paper is relevant. Respond with JSON only."""
     return results
 
 
-def _parse_filter_response(response: str) -> dict:
-    """Parse the JSON response from the filter agent."""
+async def _filter_batch(
+    model: str,
+    papers: list[ArxivPaper],
+    acceptance_criteria: str,
+) -> dict[str, bool]:
+    """Filter a batch of papers and return relevance map."""
+    papers_text = []
+    for idx, paper in enumerate(papers):
+        papers_text.append(f"""Paper {idx + 1}:
+ID: {paper.arxiv_id}
+Title: {paper.title}
+Abstract: {paper.abstract}
+Categories: {', '.join(paper.categories)}
+""")
+    
+    prompt = f"""Acceptance Criteria: {acceptance_criteria}
+
+Review the following {len(papers)} papers and determine which are relevant.
+
+{chr(10).join(papers_text)}
+
+Respond with a JSON array only:
+[{{"id": "arxiv_id", "is_relevant": true/false}}, ...]"""
+
     try:
-        start = response.find("{")
-        end = response.rfind("}") + 1
+        response = await chat_completion(model, FILTER_INSTRUCTION, prompt)
+        return _parse_batch_response(response, papers)
+    except Exception as e:
+        logger.warning(f"Failed to filter batch: {e}")
+        return {p.arxiv_id: True for p in papers}
+
+
+def _parse_batch_response(response: str, papers: list[ArxivPaper]) -> dict[str, bool]:
+    """Parse the JSON array response from batch filtering."""
+    try:
+        start = response.find("[")
+        end = response.rfind("]") + 1
         if start >= 0 and end > start:
-            return json.loads(response[start:end])
-    except (json.JSONDecodeError, ValueError):
-        pass
-    return {"is_relevant": True}
+            data = json.loads(response[start:end])
+            return {item["id"]: item.get("is_relevant", True) for item in data}
+    except (json.JSONDecodeError, ValueError, KeyError) as e:
+        logger.warning(f"Failed to parse batch response: {e}")
+    
+    return {p.arxiv_id: True for p in papers}

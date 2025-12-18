@@ -1,7 +1,7 @@
 """Tool for fetching papers from arxiv API."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import feedparser
@@ -11,7 +11,7 @@ from ..models import ArxivPaper
 
 logger = logging.getLogger(__name__)
 
-ARXIV_API_URL = "http://export.arxiv.org/api/query"
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
 
 def fetch_arxiv_papers(topics: list[str], days_back: int) -> list[ArxivPaper]:
@@ -25,7 +25,7 @@ def fetch_arxiv_papers(topics: list[str], days_back: int) -> list[ArxivPaper]:
     Returns:
         List of ArxivPaper objects
     """
-    cutoff_date = datetime.now() - timedelta(days=days_back)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
     all_papers: dict[str, ArxivPaper] = {}
     
     for topic in topics:
@@ -110,9 +110,9 @@ def _parse_entry(entry: dict) -> ArxivPaper | None:
 def _parse_date(date_str: str) -> datetime:
     """Parse date string from arxiv feed."""
     if not date_str:
-        return datetime.now()
+        return datetime.now(timezone.utc)
     try:
         return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
     except ValueError:
-        return datetime.now()
+        return datetime.now(timezone.utc)
 
