@@ -22,19 +22,54 @@ This agent workflow will perform the following steps with one execution:
 
 
 ## Configuration
-Run `cp .env.example .env` and configure the .env file. Some key configuration items that must be changed:
-- TRACE_BACK_DAYS
-- SEARCH_TOPICS
-- ACCEPTANCE_CRITERIA
-- MAX_ITEMS
-- SCORE_THRESHOLD
-- OPENAI_API_KEY_MINI
-- OPENAI_API_KEY
+Run `cp .env.example .env` and configure the .env file.
 
-Either email address list or the webhook URL shall be configured
-- EMAIL_ADDRESS_LIST
-- BREVO_API_KEY
-- WEBHOOK_URL
+### Required Settings
+
+| Variable | Description |
+|----------|-------------|
+| `API_KEY` | API key for your LLM endpoint (LiteLLM, Azure OpenAI, etc.) |
+| `API_ENDPOINT` | OpenAI-compatible API endpoint URL |
+
+### Search Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TRACE_BACK_DAYS` | 7 | Number of days to look back for papers |
+| `SEARCH_TOPICS` | - | Comma-separated list of search topics |
+| `ACCEPTANCE_CRITERIA` | - | Description of what papers to accept |
+| `MAX_ITEMS` | 5 | Maximum number of papers in the final digest |
+| `SCORE_THRESHOLD` | 50 | Minimum score (1-100) for a paper to be included |
+
+### LLM Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODEL_MINI` | gemini-2.5-flash | Model for filtering and scoring (faster/cheaper) |
+| `MODEL_FULL` | gemini-3.0-pro-preview | Model for deep analysis (more capable) |
+| `FILTER_BATCH_SIZE` | 10 | Number of papers per LLM call for filtering |
+| `SCORER_BATCH_SIZE` | 10 | Number of papers per LLM call for scoring |
+
+### Web Search (Optional)
+
+| Variable | Description |
+|----------|-------------|
+| `TAVILY_API_KEY` | Tavily API key for searching community feedback |
+
+### Notification - Email via Brevo (Optional)
+
+| Variable | Description |
+|----------|-------------|
+| `EMAIL_ADDRESS_LIST` | Comma-separated list of recipient emails |
+| `BREVO_API_KEY` | Brevo API key |
+| `BREVO_SENDER_EMAIL` | Sender email address |
+| `BREVO_SENDER_NAME` | Sender display name (default: "Arxiv Agent") |
+
+### Notification - Webhook (Optional)
+
+| Variable | Description |
+|----------|-------------|
+| `WEBHOOK_URL` | Webhook URL (supports Google Chat webhooks)
 
 ## Prompt tuning
 Tune the prompts for the agent under the prompts/ folder.
