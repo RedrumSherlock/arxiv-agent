@@ -48,8 +48,9 @@ Run `cp .env.example .env` and configure the .env file.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_MINI` | gemini-2.5-flash | Model for filtering and scoring (faster/cheaper) |
-| `MODEL_FULL` | gemini-3.0-pro-preview | Model for deep analysis (more capable) |
+| `MODEL_FILTER` | gemini-2.5-flash | Model for filtering papers |
+| `MODEL_SCORER` | gemini-2.5-flash | Model for scoring papers |
+| `MODEL_ANALYZER` | gemini-2.5-pro | Model for deep analysis |
 | `FILTER_BATCH_SIZE` | 10 | Number of papers per LLM call for filtering |
 | `SCORER_BATCH_SIZE` | 10 | Number of papers per LLM call for scoring |
 

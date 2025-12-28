@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     brevo_sender_name: str = Field(default="Arxiv Agent", alias="BREVO_SENDER_NAME")
     webhook_url: str = Field(default="", alias="WEBHOOK_URL")
     
-    model_mini: str = Field(default="gemini-2.5-flash", alias="MODEL_MINI")
-    model_full: str = Field(default="gemini-3.0-pro-preview", alias="MODEL_FULL")
+    model_filter: str = Field(default="gemini-2.5-flash", alias="MODEL_FILTER")
+    model_scorer: str = Field(default="gemini-2.5-flash", alias="MODEL_SCORER")
+    model_analyzer: str = Field(default="gemini-2.5-pro", alias="MODEL_ANALYZER")
     
     class Config:
         env_file = ".env"

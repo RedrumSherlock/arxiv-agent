@@ -52,7 +52,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
     
     # Step 2: Filter papers
     filtered = await filter_papers(
-        model=settings.model_mini,
+        model=settings.model_filter,
         papers=papers,
         acceptance_criteria=settings.acceptance_criteria,
         batch_size=settings.filter_batch_size,
@@ -67,7 +67,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
     
     # Step 3: Score papers
     scored = await score_papers(
-        model=settings.model_mini,
+        model=settings.model_scorer,
         papers=relevant_papers,
         acceptance_criteria=settings.acceptance_criteria,
         batch_size=settings.scorer_batch_size,
@@ -94,7 +94,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         paper_content = download_and_extract_paper(paper.pdf_url, paper.arxiv_id)
         
         analysis = await analyze_paper(
-            model=settings.model_full,
+            model=settings.model_analyzer,
             paper=paper,
             initial_score=scored_paper.score,
             community_feedback=feedback,
