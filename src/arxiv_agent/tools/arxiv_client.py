@@ -28,23 +28,27 @@ def fetch_arxiv_papers(topics: list[str], days_start: int, days_end: int) -> lis
     """
     start_date = datetime.now(timezone.utc) - timedelta(days=days_start)
     end_date = datetime.now(timezone.utc) - timedelta(days=days_end)
+    
+    date_from = start_date.strftime("%Y%m%d")
+    date_to = end_date.strftime("%Y%m%d")
+    
     all_papers: dict[str, ArxivPaper] = {}
     
     for topic in topics:
-        papers = _search_arxiv(topic, max_results=100)
+        papers = _search_arxiv(topic, date_from, date_to, max_results=1000)
         for paper in papers:
-            if start_date <= paper.published <= end_date:
-                all_papers[paper.arxiv_id] = paper
+            all_papers[paper.arxiv_id] = paper
     
     result = list(all_papers.values())
     logger.info(f"Fetched {len(result)} unique papers from arxiv ({days_start} to {days_end} days ago)")
     return result
 
 
-def _search_arxiv(query: str, max_results: int = 100) -> list[ArxivPaper]:
-    """Search arxiv for papers matching the query."""
+def _search_arxiv(query: str, date_from: str, date_to: str, max_results: int = 200) -> list[ArxivPaper]:
+    """Search arxiv for papers matching the query within date range."""
     encoded_query = quote(query)
-    url = f"{ARXIV_API_URL}?search_query=all:{encoded_query}&start=0&max_results={max_results}&sortBy=submittedDate&sortOrder=descending"
+    date_filter = f"+AND+submittedDate:[{date_from}0000+TO+{date_to}2359]"
+    url = f"{ARXIV_API_URL}?search_query=all:{encoded_query}{date_filter}&start=0&max_results={max_results}&sortBy=submittedDate&sortOrder=descending"
     
     try:
         response = httpx.get(url, timeout=30.0)
