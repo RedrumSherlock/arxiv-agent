@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     trace_back_days_start: int = Field(default=30, alias="TRACE_BACK_DAYS_START")
     trace_back_days_end: int = Field(default=23, alias="TRACE_BACK_DAYS_END")
     search_topics: str = Field(default="machine learning", alias="SEARCH_TOPICS")
+    arxiv_categories: str = Field(default="cs.AI,cs.LG, cs.CL", alias="ARXIV_CATEGORIES")
     acceptance_criteria: str = Field(
         default="Papers related to AI agents, LLM, or autonomous systems",
         alias="ACCEPTANCE_CRITERIA"
@@ -49,6 +50,12 @@ class Settings(BaseSettings):
     @property
     def search_topic_list(self) -> list[str]:
         return [t.strip() for t in self.search_topics.split(",") if t.strip()]
+
+    @property
+    def arxiv_category_list(self) -> list[str]:
+        if not self.arxiv_categories:
+            return []
+        return [c.strip() for c in self.arxiv_categories.split(",") if c.strip()]
 
 
 def get_settings() -> Settings:

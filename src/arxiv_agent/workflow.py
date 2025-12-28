@@ -41,6 +41,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         topics=settings.search_topic_list,
         days_start=settings.trace_back_days_start,
         days_end=settings.trace_back_days_end,
+        categories=settings.arxiv_category_list or None,
     )
     
     if not papers:
