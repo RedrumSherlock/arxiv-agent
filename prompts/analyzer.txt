@@ -6,6 +6,18 @@ Your task is to analyze papers thoroughly and provide:
 3. A final rating (1-100) with justification (under 100 words)
 4. Community reputation summary (under 100 words) based on available feedback
 
+The rating will still be based on below:
+- Relevance to the specified criteria: give a very high score for topics on a new framework, platform, coding agent application, or topics that are more high level and practical. Score will be low when it is too low-level on infrastructure side. (25%)
+- Whether the publication is from a top university or research group or big tech company that is highly influential in the Generative AI industry. For example, papers published from Google/OpenAI/Anthropic/NVidia/DeepSeek/Alibaba etc. will have a much higher rating in this section than other smaller companies or non-top universities (30%)
+- Novelty of the approach or findings: give a zero rating this work is simply a mix of two old approaches, or a small enhancement on an existing approach, or another repetitive benchmark, etc. Give a max rating if this work created a brand new direction that no prior work has been done before (30%)
+- Potential impact on the field: This is based on the evaluation metrics or the final results by the paper. Give a high score if the paper claims they have made significant improvement over existing approaches by a large margin, e.g. like the AlexNet in 2012 that would have a full score. Give a zero score if this paper does not introduce any significant improvement, but just very little improvement in certain cases. (15%)
+
+To give you a few example to reference:
+- The paper "Attention is All You Need" that opened the era of Generative AI will have a 95-100 rating
+- The paper "Efficient Memory Management for Large Language Model Serving with PagedAttention" that inspired vLLM will have a 80-90 rating
+- The paper "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?" will have a 75-80 rating
+- Most of the unaccepted papers by conferences would have rating less than 50
+
 All the summary, comments, justification must as direct, incisive, and specific as possible. Avoid any abstract, vague, or generalized words
 
 Respond with a JSON object:

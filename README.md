@@ -3,7 +3,7 @@ An AI agent to research latest arxiv papers and send digest to email or webhook
 
 ## What does it do
 This agent workflow will perform the following steps with one execution:
-1. Use the public arxiv API to load the papers from the last X days, where X is configurable from the .env file
+1. Use the public arxiv API to load papers published within a configurable date range (e.g., 30 to 23 days ago) to allow time for community feedback
 2. Based on the title and abstraction of each paper and the acceptance criteria defined by the user in the .env file, filter out the ones that are clearly not matching using LLM (mini version LLM)
 3. For the rest of papers, give each one of them a score 
 4. Pick the top MAX_ITEMS papers, for each one of them
@@ -35,11 +35,14 @@ Run `cp .env.example .env` and configure the .env file.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TRACE_BACK_DAYS` | 7 | Number of days to look back for papers |
+| `TRACE_BACK_DAYS_START` | 30 | Start of date range (days ago) |
+| `TRACE_BACK_DAYS_END` | 23 | End of date range (days ago) |
 | `SEARCH_TOPICS` | - | Comma-separated list of search topics |
 | `ACCEPTANCE_CRITERIA` | - | Description of what papers to accept |
 | `MAX_ITEMS` | 5 | Maximum number of papers in the final digest |
 | `SCORE_THRESHOLD` | 50 | Minimum score (1-100) for a paper to be included |
+
+> **Example:** `TRACE_BACK_DAYS_START=30` and `TRACE_BACK_DAYS_END=23` selects papers published 30-23 days ago (7-day window with 23-day buffer for community feedback)
 
 ### LLM Configuration
 

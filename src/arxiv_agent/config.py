@@ -7,7 +7,8 @@ from pydantic import Field
 class Settings(BaseSettings):
     """Application settings loaded from .env file."""
     
-    trace_back_days: int = Field(default=7, alias="TRACE_BACK_DAYS")
+    trace_back_days_start: int = Field(default=30, alias="TRACE_BACK_DAYS_START")
+    trace_back_days_end: int = Field(default=23, alias="TRACE_BACK_DAYS_END")
     search_topics: str = Field(default="machine learning", alias="SEARCH_TOPICS")
     acceptance_criteria: str = Field(
         default="Papers related to AI agents, LLM, or autonomous systems",

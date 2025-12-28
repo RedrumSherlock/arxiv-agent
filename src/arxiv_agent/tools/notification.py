@@ -109,42 +109,20 @@ def send_webhook_notification(
 
 
 def _build_google_chat_payload(digest_items: list[DigestItem]) -> dict:
-    """Build Google Chat webhook payload with cards."""
-    cards = []
+    """Build Google Chat webhook payload as formatted text."""
+    lines = [f"📚 *Arxiv Paper Digest* - {len(digest_items)} papers found\n"]
     
-    for item in digest_items:
-        card = {
-            "header": {
-                "title": item.title[:100],
-                "subtitle": f"Rating: {item.rating}/100 | {item.publish_date}",
-            },
-            "sections": [
-                {
-                    "widgets": [
-                        {"textParagraph": {"text": f"<b>Authors:</b> {item.authors}"}},
-                        {"textParagraph": {"text": f"<b>Summary:</b> {item.summary}"}},
-                        {"textParagraph": {"text": f"<b>Rating Justification:</b> {item.rating_justification}"}},
-                        {"textParagraph": {"text": f"<b>Community:</b> {item.community_reputation}"}},
-                        {
-                            "buttons": [
-                                {
-                                    "textButton": {
-                                        "text": "View on arXiv",
-                                        "onClick": {"openLink": {"url": item.arxiv_url}},
-                                    }
-                                }
-                            ]
-                        },
-                    ]
-                }
-            ],
-        }
-        cards.append({"card": card})
+    for i, item in enumerate(digest_items, 1):
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"*{i}. {item.title}*")
+        lines.append(f"⭐ Rating: {item.rating}/100 | 📅 {item.publish_date}")
+        lines.append(f"👥 {item.authors}")
+        lines.append(f"\n📝 *Summary:* {item.summary}")
+        lines.append(f"\n💡 *Rating Justification:* {item.rating_justification}")
+        lines.append(f"\n🗣️ *Community:* {item.community_reputation}")
+        lines.append(f"\n🔗 {item.arxiv_url}\n")
     
-    return {
-        "text": f"📚 *Arxiv Paper Digest* - {len(digest_items)} papers found",
-        "cardsV2": [{"cardId": f"paper-{i}", "card": c["card"]} for i, c in enumerate(cards)],
-    }
+    return {"text": "\n".join(lines)}
 
 
 def _build_email_html(digest_items: list[DigestItem]) -> str:

@@ -39,7 +39,8 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
     logger.info(f"Fetching papers for topics: {settings.search_topic_list}")
     papers = fetch_arxiv_papers(
         topics=settings.search_topic_list,
-        days_back=settings.trace_back_days,
+        days_start=settings.trace_back_days_start,
+        days_end=settings.trace_back_days_end,
     )
     
     if not papers:

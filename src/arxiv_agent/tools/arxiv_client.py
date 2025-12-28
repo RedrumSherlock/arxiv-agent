@@ -14,28 +14,30 @@ logger = logging.getLogger(__name__)
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
 
-def fetch_arxiv_papers(topics: list[str], days_back: int) -> list[ArxivPaper]:
+def fetch_arxiv_papers(topics: list[str], days_start: int, days_end: int) -> list[ArxivPaper]:
     """
     Fetch papers from arxiv API for given topics within the specified time range.
     
     Args:
         topics: List of search topics/keywords
-        days_back: Number of days to look back
+        days_start: Start of range in days ago (e.g., 30 = from 30 days ago)
+        days_end: End of range in days ago (e.g., 23 = to 23 days ago)
         
     Returns:
-        List of ArxivPaper objects
+        List of ArxivPaper objects published between days_start and days_end ago
     """
-    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days_start)
+    end_date = datetime.now(timezone.utc) - timedelta(days=days_end)
     all_papers: dict[str, ArxivPaper] = {}
     
     for topic in topics:
         papers = _search_arxiv(topic, max_results=100)
         for paper in papers:
-            if paper.published >= cutoff_date:
+            if start_date <= paper.published <= end_date:
                 all_papers[paper.arxiv_id] = paper
     
     result = list(all_papers.values())
-    logger.info(f"Fetched {len(result)} unique papers from arxiv")
+    logger.info(f"Fetched {len(result)} unique papers from arxiv ({days_start} to {days_end} days ago)")
     return result
 
 
