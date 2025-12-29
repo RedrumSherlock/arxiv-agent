@@ -4,21 +4,13 @@ An AI agent to research latest arxiv papers and send digest to email or webhook
 ## What does it do
 This agent workflow will perform the following steps with one execution:
 1. Use the public arxiv API to load papers published within a configurable date range (e.g., 30 to 23 days ago) to allow time for community feedback
-2. Based on the title and abstraction of each paper and the acceptance criteria defined by the user in the .env file, filter out the ones that are clearly not matching using LLM (mini version LLM)
-3. For the rest of papers, give each one of them a score 
+2. (LLM based) Based on the title and abstraction of each paper and the acceptance criteria defined in the .env file, filter out the ones that are clearly not matching using LLM
+3. (LLM based) For the rest of papers, use LLM to give each one of them a score 
 4. Pick the top MAX_ITEMS papers, for each one of them
     4a. web search the community feedback of these papers
     4b. download the paper from arxiv
-    4c. combine the above information and give a final feedback on this paper using LLM (full/pro version LLM)
-5. Send the digest of each paper as a list to the notification channel with the following format. The notification channel shall support email and webhook. For email it should use Brevo API.
-    - Title
-    - Summary (less than 100 words)
-    - Authors (including the university/organiaztion)
-    - Publish Date
-    - Rating (a score from 1-100)
-    - Rating justification (less than 100 words)
-    - Comminity reputation (less than 100 words)
-
+    4c. (LLM based) combine the above information and give a final feedback on this paper using LLM
+5. Send the digest of each paper as a list to the notification channel like email or Google Chat webhook, including title, summary, authors, publication date, rating, community feedback, etc.
 
 
 ## Configuration
@@ -48,11 +40,11 @@ Run `cp .env.example .env` and configure the .env file.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_FILTER` | gemini-2.5-flash | Model for filtering papers |
-| `MODEL_SCORER` | gemini-2.5-flash | Model for scoring papers |
-| `MODEL_ANALYZER` | gemini-2.5-pro | Model for deep analysis |
-| `FILTER_BATCH_SIZE` | 10 | Number of papers per LLM call for filtering |
-| `SCORER_BATCH_SIZE` | 10 | Number of papers per LLM call for scoring |
+| `MODEL_FILTER` | gemini-3-flash | Model for filtering papers |
+| `MODEL_SCORER` | gemini-3-flash | Model for scoring papers |
+| `MODEL_ANALYZER` | gemini-3-pro | Model for deep analysis |
+| `FILTER_BATCH_SIZE` | 100 | Number of papers per LLM call for filtering |
+| `SCORER_BATCH_SIZE` | 50 | Number of papers per LLM call for scoring |
 
 ### Web Search (Optional)
 
