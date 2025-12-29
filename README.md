@@ -7,9 +7,9 @@ This agent workflow will perform the following steps with one execution:
 2. (LLM based) Based on the title and abstraction of each paper and the acceptance criteria defined in the .env file, filter out the ones that are clearly not matching using LLM
 3. (LLM based) For the rest of papers, use LLM to give each one of them a score 
 4. Pick the top MAX_ITEMS papers, for each one of them
-    4a. web search the community feedback of these papers
-    4b. download the paper from arxiv
-    4c. (LLM based) combine the above information and give a final feedback on this paper using LLM
+    - 4a. web search the community feedback of these papers
+    - 4b. download the paper from arxiv
+    - 4c. (LLM based) combine the above information and give a final feedback on this paper using LLM 
 5. Send the digest of each paper as a list to the notification channel like email or Google Chat webhook, including title, summary, authors, publication date, rating, community feedback, etc.
 
 
