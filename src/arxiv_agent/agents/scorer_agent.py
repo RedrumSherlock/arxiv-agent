@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from ..llm import chat_completion
-from ..models import ArxivPaper, ScoredPaper
+from ..models import ArxivPaper, ScoredPaper, ScoreResult
 
 logger = logging.getLogger(__name__)
 
@@ -32,30 +32,34 @@ async def score_papers(
     papers: list[ArxivPaper],
     acceptance_criteria: str,
     batch_size: int = 10,
-) -> list[ScoredPaper]:
+) -> ScoreResult:
     """
     Score papers using the LLM in batches.
-    
+
     Args:
         model: Model name to use
         papers: List of papers to score
         acceptance_criteria: Criteria for evaluation context
         batch_size: Number of papers to process per LLM call
-        
+
     Returns:
-        List of ScoredPaper objects sorted by score descending
+        ScoreResult with scored papers and error tracking
     """
     results = []
     paper_map = {p.arxiv_id: p for p in papers}
-    
+    total_batches = (len(papers) + batch_size - 1) // batch_size
+    failed_batches = 0
+
     for i in range(0, len(papers), batch_size):
         batch = papers[i:i + batch_size]
         batch_num = (i // batch_size) + 1
-        total_batches = (len(papers) + batch_size - 1) // batch_size
         logger.info(f"Scoring batch {batch_num}/{total_batches} ({len(batch)} papers)")
-        
-        batch_results = await _score_batch(model, batch, acceptance_criteria)
-        
+
+        batch_results, batch_failed = await _score_batch(model, batch, acceptance_criteria)
+
+        if batch_failed:
+            failed_batches += 1
+
         for arxiv_id, score_data in batch_results.items():
             if arxiv_id in paper_map:
                 results.append(ScoredPaper(
@@ -63,23 +67,27 @@ async def score_papers(
                     score=score_data["score"],
                     score_justification=score_data["justification"],
                 ))
-        
+
         for paper in batch:
             if paper.arxiv_id not in batch_results:
                 results.append(ScoredPaper(paper=paper, score=50))
-    
+
     results.sort(key=lambda x: x.score, reverse=True)
     logger.info(f"Scored {len(results)} papers, top score: {results[0].score if results else 0}")
-    
-    return results
+
+    return ScoreResult(
+        papers=results,
+        total_batches=total_batches,
+        failed_batches=failed_batches,
+    )
 
 
 async def _score_batch(
     model: str,
     papers: list[ArxivPaper],
     acceptance_criteria: str,
-) -> dict[str, dict]:
-    """Score a batch of papers and return scores map."""
+) -> tuple[dict[str, dict], bool]:
+    """Score a batch of papers and return scores map with error flag."""
     papers_text = []
     for idx, paper in enumerate(papers):
         papers_text.append(f"""Paper {idx + 1}:
@@ -89,7 +97,7 @@ Abstract: {paper.abstract}
 Authors: {', '.join(paper.authors)}
 Categories: {', '.join(paper.categories)}
 """)
-    
+
     prompt = f"""Evaluation Context: {acceptance_criteria}
 
 Score the following {len(papers)} papers from 1-100.
@@ -101,10 +109,10 @@ Respond with a JSON array only:
 
     try:
         response = await chat_completion(model, SCORER_INSTRUCTION, prompt)
-        return _parse_batch_response(response, papers)
+        return _parse_batch_response(response, papers), False
     except Exception as e:
         logger.warning(f"Failed to score batch: {e}")
-        return {p.arxiv_id: {"score": 50, "justification": ""} for p in papers}
+        return {p.arxiv_id: {"score": 50, "justification": ""} for p in papers}, True
 
 
 def _parse_batch_response(response: str, papers: list[ArxivPaper]) -> dict[str, dict]:

@@ -22,11 +22,25 @@ class FilteredPaper(BaseModel):
     is_relevant: bool
 
 
+class FilterResult(BaseModel):
+    """Result of filtering papers including error tracking."""
+    papers: list[FilteredPaper]
+    total_batches: int
+    failed_batches: int
+
+
 class ScoredPaper(BaseModel):
     """Paper with relevance score."""
     paper: ArxivPaper
     score: int = Field(ge=0, le=100)
     score_justification: str = ""
+
+
+class ScoreResult(BaseModel):
+    """Result of scoring papers including error tracking."""
+    papers: list[ScoredPaper]
+    total_batches: int
+    failed_batches: int
 
 
 class CommunityFeedback(BaseModel):
