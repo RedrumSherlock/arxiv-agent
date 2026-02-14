@@ -93,7 +93,7 @@ def _search_arxiv_with_date_range(
 
 def _search_arxiv(query: str, start: int = 0, max_results: int = 200) -> list[ArxivPaper]:
     """Search arxiv for papers matching the query."""
-    encoded_query = quote(query)
+    encoded_query = quote(f'"{query}"')
     url = f"{ARXIV_API_URL}?search_query=all:{encoded_query}&start={start}&max_results={max_results}&sortBy=submittedDate&sortOrder=descending"
     
     logger.debug(f"Arxiv query: start={start}, max={max_results}")
