@@ -19,8 +19,8 @@ class ArxivPaper(BaseModel):
 class ArxivFetchResult(BaseModel):
     """Result of fetching papers from arxiv including error tracking."""
     papers: list[ArxivPaper]
-    total_topics: int
-    failed_topics: list[str] = Field(default_factory=list)
+    total_sources: int
+    failed_sources: list[str] = Field(default_factory=list)
 
 
 class FilteredPaper(BaseModel):

@@ -1,29 +1,36 @@
-"""Tool for fetching papers from arxiv API."""
+"""Tool for fetching papers from arxiv via its OAI-PMH interface."""
 
 import logging
 import random
+import re
 import time
-from datetime import datetime, timedelta, timezone
-from urllib.parse import quote
+from datetime import date, datetime, timedelta, timezone
+from urllib.parse import urlencode
+from xml.etree import ElementTree
 
-import feedparser
 import httpx
 
 from ..models import ArxivFetchResult, ArxivPaper
 
 logger = logging.getLogger(__name__)
 
-ARXIV_API_URL = "https://export.arxiv.org/api/query"
-
-# arxiv asks API clients to identify themselves and to leave at least 3 seconds
-# between requests. Their 429 "Rate exceeded" is a server-capacity signal rather
-# than a per-client quota, so the only remedy is to wait and try again.
+# arxiv's query API (export.arxiv.org/api/query) answers 429 "Rate exceeded"
+# regardless of who asks or how slowly, so papers are harvested from OAI-PMH
+# instead. Both interfaces share one policy: at most one request every three
+# seconds over a single connection.
+ARXIV_OAI_URL = "https://oaipmh.arxiv.org/oai"
 ARXIV_USER_AGENT = "arxiv-agent/0.1 (+https://github.com/RedrumSherlock/arxiv-agent)"
 MIN_REQUEST_INTERVAL = 3.0
 RETRY_BASE_DELAY = 15.0
 RETRY_MAX_DELAY = 600.0
 DEFAULT_RETRY_BUDGET = 2700.0
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+MAX_PAGES_PER_SET = 60
+
+OAI_NS = {
+    "oai": "http://www.openarchives.org/OAI/2.0/",
+    "arxiv": "http://arxiv.org/OAI/arXiv/",
+}
 
 _last_request_at = 0.0
 
@@ -36,43 +43,70 @@ def fetch_arxiv_papers(
     retry_budget: float = DEFAULT_RETRY_BUDGET,
 ) -> ArxivFetchResult:
     """
-    Fetch papers from arxiv API for given topics within the specified time range.
+    Fetch papers submitted to the given arxiv categories within a time range.
+
+    OAI-PMH selects by category and date, not by keyword, so the harvest is
+    filtered against the topics locally on title and abstract.
 
     Args:
-        topics: List of search topics/keywords
+        topics: Search phrases; a paper is kept when any of them appears in its
+            title or abstract. An empty list keeps every paper in the categories
         days_start: Start of range in days ago (e.g., 30 = from 30 days ago)
         days_end: End of range in days ago (e.g., 23 = to 23 days ago)
-        categories: Optional list of arxiv categories to filter (e.g., ['cs.AI', 'cs.LG'])
-        retry_budget: Total seconds to spend retrying rate-limited requests, shared
-            across all topics
+        categories: arxiv categories to harvest (e.g., ['cs.AI', 'cs.LG'])
+        retry_budget: Total seconds to spend retrying failed requests, shared
+            across all categories
 
     Returns:
-        ArxivFetchResult with the papers published between days_start and days_end
-        ago, plus the topics whose queries failed.
+        ArxivFetchResult with the papers submitted between days_start and
+        days_end ago, plus the categories that could not be harvested.
     """
-    start_date = datetime.now(timezone.utc) - timedelta(days=days_start)
-    end_date = datetime.now(timezone.utc) - timedelta(days=days_end)
-
-    logger.info(f"Date range: {start_date.date()} to {end_date.date()}")
-    if categories:
-        logger.info(f"Filtering by categories: {categories}")
-
-    all_papers: dict[str, ArxivPaper] = {}
-    failed_topics: list[str] = []
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=days_start)
+    end_date = today - timedelta(days=days_end)
     deadline = time.monotonic() + retry_budget
 
-    for topic in topics:
-        try:
-            papers = _search_arxiv_with_date_range(
-                topic, start_date, end_date, categories, deadline
-            )
-        except httpx.HTTPError as e:
-            logger.error(f"Topic '{topic}': arxiv query failed: {e}")
-            failed_topics.append(topic)
+    logger.info(f"Date range: {start_date} to {end_date}")
+
+    if not categories:
+        logger.error("No arxiv categories configured; OAI-PMH harvesting needs at least one")
+        return ArxivFetchResult(papers=[], total_sources=0, failed_sources=["(no categories)"])
+
+    logger.info(f"Harvesting categories: {categories}")
+
+    try:
+        set_specs = _resolve_set_specs(categories, deadline)
+    except httpx.HTTPError as e:
+        logger.error(f"Could not list arxiv OAI sets: {_brief(e)}")
+        return ArxivFetchResult(papers=[], total_sources=len(categories), failed_sources=categories)
+
+    all_papers: dict[str, ArxivPaper] = {}
+    failed_sources: list[str] = []
+
+    for category in categories:
+        set_spec = set_specs.get(category)
+        if not set_spec:
+            logger.error(f"Category '{category}': no matching OAI set")
+            failed_sources.append(category)
             continue
 
-        logger.info(f"Topic '{topic}': {len(papers)} papers in date range")
-        for paper in papers:
+        try:
+            # Harvest up to today rather than end_date: OAI-PMH selects on last
+            # modified date, so a paper submitted in the window but revised after
+            # it would otherwise be invisible.
+            papers = _harvest_set(set_spec, start_date, today, deadline)
+        except httpx.HTTPError as e:
+            logger.error(f"Category '{category}': harvest failed: {_brief(e)}")
+            failed_sources.append(category)
+            continue
+
+        in_range = [p for p in papers if _submitted_in_window(p, start_date, end_date)]
+        matching = [p for p in in_range if _matches_topics(p, topics)]
+        logger.info(
+            f"Category '{category}': {len(papers)} records, {len(in_range)} in date range, "
+            f"{len(matching)} matching topics"
+        )
+        for paper in matching:
             all_papers[paper.arxiv_id] = paper
 
     result = list(all_papers.values())
@@ -84,69 +118,151 @@ def fetch_arxiv_papers(
     logger.info(f"Fetched {len(result)} unique papers from arxiv ({days_start} to {days_end} days ago)")
     return ArxivFetchResult(
         papers=result,
-        total_topics=len(topics),
-        failed_topics=failed_topics,
+        total_sources=len(categories),
+        failed_sources=failed_sources,
     )
 
 
-def _search_arxiv_with_date_range(
-    query: str,
-    start_date: datetime,
-    end_date: datetime,
-    categories: list[str] | None,
+def _resolve_set_specs(categories: list[str], deadline: float) -> dict[str, str]:
+    """
+    Map arxiv categories onto OAI set specs.
+
+    Sets are named by group, e.g. 'cs.AI' lives at 'cs:cs:AI' and 'astro-ph.CO'
+    at 'physics:astro-ph:CO', so the grouping is read off ListSets rather than
+    guessed.
+    """
+    root = _oai_request({"verb": "ListSets"}, deadline)
+
+    by_category: dict[str, str] = {}
+    for spec_element in root.iter(f"{{{OAI_NS['oai']}}}setSpec"):
+        spec = (spec_element.text or "").strip()
+        parts = spec.split(":")
+        if len(parts) == 3:
+            by_category[f"{parts[1]}.{parts[2]}"] = spec
+        elif len(parts) == 2:
+            by_category.setdefault(parts[1], spec)
+
+    return {c: by_category[c] for c in categories if c in by_category}
+
+
+def _harvest_set(
+    set_spec: str,
+    from_date: date,
+    until_date: date,
     deadline: float,
-    batch_size: int = 200,
-    max_batches: int = 10,
 ) -> list[ArxivPaper]:
-    """Search arxiv with pagination until we find papers in the date range."""
-    matching_papers = []
-    offset = 0
-    category_set = set(categories) if categories else None
+    """Harvest every record in an OAI set, following resumption tokens."""
+    params = {
+        "verb": "ListRecords",
+        "metadataPrefix": "arXiv",
+        "set": set_spec,
+        "from": from_date.isoformat(),
+        "until": until_date.isoformat(),
+    }
+    papers: list[ArxivPaper] = []
 
-    for batch_num in range(max_batches):
-        papers = _search_arxiv(query, deadline, start=offset, max_results=batch_size)
+    for page in range(MAX_PAGES_PER_SET):
+        root = _oai_request(params, deadline)
 
-        if not papers:
-            break
+        error = root.find("oai:error", OAI_NS)
+        if error is not None:
+            code = error.get("code", "")
+            if code == "noRecordsMatch":
+                break
+            raise httpx.HTTPError(f"OAI error {code}: {(error.text or '').strip()}")
 
-        oldest_in_batch = min(p.published for p in papers)
-
-        for paper in papers:
-            if start_date <= paper.published <= end_date:
-                if category_set is None or category_set.intersection(paper.categories):
-                    matching_papers.append(paper)
-
-        if oldest_in_batch < start_date:
-            break
-
-        offset += batch_size
-
-    return matching_papers
-
-
-def _search_arxiv(
-    query: str, deadline: float, start: int = 0, max_results: int = 200
-) -> list[ArxivPaper]:
-    """Search arxiv for papers matching the query. Raises httpx.HTTPError on failure."""
-    encoded_query = quote(f'"{query}"')
-    url = f"{ARXIV_API_URL}?search_query=all:{encoded_query}&start={start}&max_results={max_results}&sortBy=submittedDate&sortOrder=descending"
-
-    logger.debug(f"Arxiv query: start={start}, max={max_results}")
-
-    response = _get_with_retry(url, deadline)
-    feed = feedparser.parse(response.text)
-    papers = []
-
-    for entry in feed.entries:
-        try:
-            paper = _parse_entry(entry)
+        for record in root.iter(f"{{{OAI_NS['oai']}}}record"):
+            paper = _parse_record(record)
             if paper:
                 papers.append(paper)
-        except Exception as e:
-            logger.warning(f"Failed to parse entry: {e}")
-            continue
+
+        token = root.find("oai:ListRecords/oai:resumptionToken", OAI_NS)
+        if token is None or not (token.text or "").strip():
+            break
+
+        params = {"verb": "ListRecords", "resumptionToken": token.text.strip()}
+    else:
+        logger.warning(f"Set '{set_spec}': stopped at the {MAX_PAGES_PER_SET} page limit")
 
     return papers
+
+
+def _parse_record(record: ElementTree.Element) -> ArxivPaper | None:
+    """Parse one OAI record carrying arxiv metadata into an ArxivPaper."""
+    meta = record.find("oai:metadata/arxiv:arXiv", OAI_NS)
+    if meta is None:
+        return None
+
+    arxiv_id = _text(meta, "arxiv:id")
+    title = _text(meta, "arxiv:title")
+    if not arxiv_id or not title:
+        return None
+
+    created = _parse_date(_text(meta, "arxiv:created"))
+    updated_text = _text(meta, "arxiv:updated")
+    updated = _parse_date(updated_text) if updated_text else created
+
+    authors = []
+    for author in meta.findall("arxiv:authors/arxiv:author", OAI_NS):
+        name = " ".join(
+            part
+            for part in (_text(author, "arxiv:forenames"), _text(author, "arxiv:keyname"))
+            if part
+        )
+        if name:
+            authors.append(name)
+
+    return ArxivPaper(
+        arxiv_id=arxiv_id,
+        title=_collapse(title),
+        abstract=_collapse(_text(meta, "arxiv:abstract")),
+        authors=authors,
+        published=created,
+        updated=updated,
+        pdf_url=f"https://arxiv.org/pdf/{arxiv_id}",
+        categories=_text(meta, "arxiv:categories").split(),
+    )
+
+
+def _submitted_in_window(paper: ArxivPaper, start_date: date, end_date: date) -> bool:
+    """
+    Whether the paper was first submitted inside the window.
+
+    A harvest returns revisions as well as new papers, and arxiv stamps a revised
+    record with the revision date, so the date alone would let a years-old paper
+    through. The identifier settles it: its YYMM prefix is the month arxiv
+    announced the paper, so a prefix older than the stamped month means the record
+    is a revision. The prefix can be one month later than the date when a paper
+    submitted late in a month is announced in the next one.
+    """
+    submitted = paper.published.date()
+    if not (start_date <= submitted <= end_date):
+        return False
+
+    match = re.fullmatch(r"(\d{2})(\d{2})\.\d{4,5}(v\d+)?", paper.arxiv_id)
+    if not match:
+        # Pre-2007 identifiers such as 'cs/0701001' cannot be new submissions.
+        return False
+
+    announced = (2000 + int(match.group(1))) * 12 + int(match.group(2))
+    stamped = submitted.year * 12 + submitted.month
+    return announced in (stamped, stamped + 1)
+
+
+def _matches_topics(paper: ArxivPaper, topics: list[str]) -> bool:
+    """Whether any topic phrase appears in the paper's title or abstract."""
+    if not topics:
+        return True
+    haystack = f"{paper.title} {paper.abstract}".lower()
+    return any(topic.strip().lower() in haystack for topic in topics if topic.strip())
+
+
+def _oai_request(params: dict[str, str], deadline: float) -> ElementTree.Element:
+    """Send one OAI-PMH request and return the parsed response root."""
+    url = f"{ARXIV_OAI_URL}?{urlencode(params)}"
+    logger.debug(f"OAI request: {params.get('verb')} {params.get('set', '')}")
+    response = _get_with_retry(url, deadline)
+    return ElementTree.fromstring(response.content)
 
 
 def _get_with_retry(url: str, deadline: float) -> httpx.Response:
@@ -180,7 +296,8 @@ def _get_with_retry(url: str, deadline: float) -> httpx.Response:
         remaining = deadline - time.monotonic()
         if delay >= remaining:
             logger.error(
-                f"Giving up on arxiv after {attempt + 1} attempts, retry budget exhausted: {last_error}"
+                f"Giving up on arxiv after {attempt + 1} attempts, retry budget exhausted: "
+                f"{_brief(last_error)}"
             )
             raise last_error
 
@@ -203,11 +320,6 @@ def _retry_delay(attempt: int, retry_after: str | None) -> float:
     return backoff + random.uniform(0, backoff * 0.25)
 
 
-def _brief(error: Exception) -> str:
-    """First line of an exception, so retry logs stay to one line each."""
-    return str(error).split("\n")[0]
-
-
 def _throttle() -> None:
     """Keep at least MIN_REQUEST_INTERVAL seconds between arxiv requests."""
     global _last_request_at
@@ -217,52 +329,27 @@ def _throttle() -> None:
     _last_request_at = time.monotonic()
 
 
-def _parse_entry(entry: dict) -> ArxivPaper | None:
-    """Parse a feedparser entry into an ArxivPaper object."""
-    arxiv_id = entry.get("id", "").split("/abs/")[-1]
-    if not arxiv_id:
-        return None
+def _text(element: ElementTree.Element, path: str) -> str:
+    """Stripped text of a child element, or an empty string when it is absent."""
+    found = element.find(path, OAI_NS)
+    return (found.text or "").strip() if found is not None else ""
 
-    title = entry.get("title", "").replace("\n", " ").strip()
-    abstract = entry.get("summary", "").replace("\n", " ").strip()
 
-    authors = [author.get("name", "") for author in entry.get("authors", [])]
+def _collapse(text: str) -> str:
+    """Collapse the newlines and padding arxiv wraps titles and abstracts in."""
+    return re.sub(r"\s+", " ", text).strip()
 
-    published = _parse_date(entry.get("published", ""))
-    updated = _parse_date(entry.get("updated", ""))
 
-    pdf_url = ""
-    for link in entry.get("links", []):
-        if link.get("type") == "application/pdf":
-            pdf_url = link.get("href", "")
-            break
-
-    if not pdf_url:
-        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
-
-    categories = []
-    for tag in entry.get("tags", []):
-        term = tag.get("term", "")
-        if term:
-            categories.append(term)
-
-    return ArxivPaper(
-        arxiv_id=arxiv_id,
-        title=title,
-        abstract=abstract,
-        authors=authors,
-        published=published,
-        updated=updated,
-        pdf_url=pdf_url,
-        categories=categories,
-    )
+def _brief(error: Exception) -> str:
+    """First line of an exception, so retry logs stay to one line each."""
+    return str(error).split("\n")[0]
 
 
 def _parse_date(date_str: str) -> datetime:
-    """Parse date string from arxiv feed."""
+    """Parse a YYYY-MM-DD date from arxiv OAI metadata."""
     if not date_str:
         return datetime.now(timezone.utc)
     try:
-        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        return datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
     except ValueError:
         return datetime.now(timezone.utc)

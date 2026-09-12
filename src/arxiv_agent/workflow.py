@@ -49,8 +49,8 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
     papers = fetch_result.papers
 
     if not papers:
-        if fetch_result.failed_topics:
-            reason = "Arxiv could not be queried, so no papers were retrieved."
+        if fetch_result.failed_sources:
+            reason = "Arxiv could not be harvested, so no papers were retrieved."
             logger.error(reason)
         else:
             reason = "No papers found from arxiv for the specified search criteria."
@@ -155,11 +155,10 @@ def _build_status_message(
     """Build a status message with error details."""
     lines = [reason, "", f"Papers fetched from arxiv: {len(fetch_result.papers)}"]
 
-    if fetch_result.failed_topics:
+    if fetch_result.failed_sources:
         lines.append(
-            f"Arxiv errors: {len(fetch_result.failed_topics)}/{fetch_result.total_topics} "
-            f"topics failed to fetch ({', '.join(fetch_result.failed_topics)}). "
-            "Arxiv rate-limited or rejected these queries."
+            f"Arxiv errors: {len(fetch_result.failed_sources)}/{fetch_result.total_sources} "
+            f"categories failed to harvest ({', '.join(fetch_result.failed_sources)})."
         )
 
     if filter_total_batches > 0:
