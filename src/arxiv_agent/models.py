@@ -16,6 +16,13 @@ class ArxivPaper(BaseModel):
     categories: list[str]
 
 
+class ArxivFetchResult(BaseModel):
+    """Result of fetching papers from arxiv including error tracking."""
+    papers: list[ArxivPaper]
+    total_topics: int
+    failed_topics: list[str] = Field(default_factory=list)
+
+
 class FilteredPaper(BaseModel):
     """Paper after initial filtering with relevance flag."""
     paper: ArxivPaper

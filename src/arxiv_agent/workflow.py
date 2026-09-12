@@ -3,7 +3,7 @@
 import logging
 
 from .config import Settings
-from .models import DigestItem, NotificationResult
+from .models import ArxivFetchResult, DigestItem, NotificationResult
 from .tools import (
     fetch_arxiv_papers,
     search_paper_feedback,
@@ -39,17 +39,24 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
 
     # Step 1: Fetch papers
     logger.info(f"Fetching papers for topics: {settings.search_topic_list}")
-    papers = fetch_arxiv_papers(
+    fetch_result = fetch_arxiv_papers(
         topics=settings.search_topic_list,
         days_start=settings.trace_back_days_start,
         days_end=settings.trace_back_days_end,
         categories=settings.arxiv_category_list or None,
+        retry_budget=settings.arxiv_retry_budget_minutes * 60,
     )
+    papers = fetch_result.papers
 
     if not papers:
-        logger.warning("No papers found from arxiv")
+        if fetch_result.failed_topics:
+            reason = "Arxiv could not be queried, so no papers were retrieved."
+            logger.error(reason)
+        else:
+            reason = "No papers found from arxiv for the specified search criteria."
+            logger.warning(reason)
         await _send_status_notifications(
-            "No papers found from arxiv for the specified search criteria.",
+            _build_status_message(reason, fetch_result, 0, 0, 0, 0),
             settings,
         )
         return []
@@ -71,7 +78,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         logger.warning("No papers passed the relevance filter")
         message = _build_status_message(
             "No papers passed the relevance filter.",
-            len(papers),
+            fetch_result,
             filter_result.failed_batches,
             filter_result.total_batches,
             0,
@@ -98,7 +105,7 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
         logger.warning("No papers met the score threshold")
         message = _build_status_message(
             f"No papers met the score threshold ({settings.score_threshold}).",
-            len(papers),
+            fetch_result,
             filter_result.failed_batches,
             filter_result.total_batches,
             score_result.failed_batches,
@@ -139,14 +146,21 @@ async def run_workflow(settings: Settings) -> list[DigestItem]:
 
 def _build_status_message(
     reason: str,
-    total_papers: int,
+    fetch_result: ArxivFetchResult,
     filter_failed_batches: int,
     filter_total_batches: int,
     scorer_failed_batches: int,
     scorer_total_batches: int,
 ) -> str:
     """Build a status message with error details."""
-    lines = [reason, "", f"Papers fetched from arxiv: {total_papers}"]
+    lines = [reason, "", f"Papers fetched from arxiv: {len(fetch_result.papers)}"]
+
+    if fetch_result.failed_topics:
+        lines.append(
+            f"Arxiv errors: {len(fetch_result.failed_topics)}/{fetch_result.total_topics} "
+            f"topics failed to fetch ({', '.join(fetch_result.failed_topics)}). "
+            "Arxiv rate-limited or rejected these queries."
+        )
 
     if filter_total_batches > 0:
         if filter_failed_batches > 0:

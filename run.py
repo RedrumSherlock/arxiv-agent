@@ -40,7 +40,7 @@ async def _main() -> None:
         logger.error("API_KEY and API_ENDPOINT are required")
         sys.exit(1)
     
-    init_client(settings.api_key, settings.api_endpoint)
+    init_client(settings.api_key, settings.api_endpoint, settings.reasoning_effort)
     
     if settings.tavily_api_key:
         init_tavily(settings.tavily_api_key)

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     trace_back_days_end: int = Field(default=23, alias="TRACE_BACK_DAYS_END")
     search_topics: str = Field(default="machine learning", alias="SEARCH_TOPICS")
     arxiv_categories: str = Field(default="cs.AI,cs.LG, cs.CL", alias="ARXIV_CATEGORIES")
+    arxiv_retry_budget_minutes: int = Field(default=45, alias="ARXIV_RETRY_BUDGET_MINUTES")
     acceptance_criteria: str = Field(
         default="Papers related to AI agents, LLM, or autonomous systems",
         alias="ACCEPTANCE_CRITERIA"
@@ -36,6 +37,10 @@ class Settings(BaseSettings):
     model_filter: str = Field(default="gemini-2.5-flash", alias="MODEL_FILTER")
     model_scorer: str = Field(default="gemini-2.5-flash", alias="MODEL_SCORER")
     model_analyzer: str = Field(default="gemini-2.5-pro", alias="MODEL_ANALYZER")
+
+    # Reasoning effort passed to every model call: none, minimal, low, medium, high,
+    # xhigh. Leave empty for models that do not support the parameter.
+    reasoning_effort: str = Field(default="high", alias="REASONING_EFFORT")
     
     class Config:
         env_file = ".env"
